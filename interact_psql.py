@@ -1,5 +1,5 @@
 import psycopg2
-# import xlrd
+import xlrd
 from decouple import config
 
 database = config('DB_NAME')
@@ -125,11 +125,15 @@ class InteractPsql:
 
         Args:
             table_name (string): name of the table
-            column_list (tuple): tuple of the names of the columns (string) to insert
+            column_list (tuple or list): tuple or list of the names of the columns (string) to insert
             values_insert (list): list of tuples (which must have the same length as the tuple from column_list) with the values to insert
         """
-        if all(len(value) == len(column_list) for value in values_insert):
-            column_string = ", ".join(column_list)
+        all_val_list_or_tuple = all(isinstance(
+            value, (list, tuple)) for value in values_insert)
+        all_len_match = all(len(value) == len(column_list)
+                            for value in values_insert)
+        column_string = ", ".join(column_list)
+        if (all_len_match and all_val_list_or_tuple):
             for value in values_insert:
                 value_string = ", ".join(value)
                 self._cursor.execute(self._insert_query.format(
@@ -137,6 +141,13 @@ class InteractPsql:
                 self._pg_db.commit()
                 records = self._cursor.fetchall()
                 print("Output: ", records)
+        elif (all_val_list_or_tuple == False and (len(column_list) == len(values_insert))):
+            value_string = ", ".join(values_insert)
+            self._cursor.execute(self._insert_query.format(
+                table_name, column_string, value_string))
+            self._pg_db.commit()
+            records = self._cursor.fetchall()
+            print("Output: ", records)
         else:
             print("The length of columns and values don't match at least for one element")
 
@@ -173,6 +184,31 @@ class InteractPsql:
         with open(filename) as f:
             self._cursor.copy_from(f, table_name, sep, columns=column_list)
         self._pg_db.commit()
+
+    def from_excel_to_psql(self, filename, sheet_number, table_name, column_list, headers=False):
+        """Import excel to the database. The number of columns in Excel must match with passed column list.
+
+        Args:
+            filename (string): name of the file in the current location
+            sheet_number (int): the number of the sheet. It begins from 0
+            table_name (string): name of the table
+            column_list (tuple or list): tuple of the names of the columns (string). The length and types should match the content of the file to read. If not specified, it is assumed that the entire table matches the file structure.
+            headers (bool, optional): if headers are in Excel then True. Defaults to False.
+        """
+        book = xlrd.open_workbook(filename=filename)
+        sheet = book.sheet_by_index(sheet_number)
+        num_columns = sheet.ncols
+        if num_columns == len(column_list):
+            num_rows = sheet.nrows
+            rows_range = range(0 if headers == False else 1, num_rows)
+            for row_list in rows_range:
+                values = sheet.row_values(row_list)
+                for i, cell in enumerate(values):
+                    if isinstance(cell, str):
+                        values[i] = "'" + cell + "'"
+                self.save_match_to_psql(table_name, column_list, values)
+        else:
+            print("The length of columns and values don't match at least for one element")
 
     def close(self):
         """Close cursor and database
