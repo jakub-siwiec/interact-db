@@ -151,27 +151,6 @@ class InteractPsql:
         else:
             print("The length of columns and values don't match at least for one element")
 
-    def save_skip_to_psql(self, table_name, column_list, values_insert):
-        """Save to postgresql database skipping the record if the the number of columns and values doesn't match
-
-        Args:
-            table_name (string): name of the table
-            column_list (tuple): tuple of the names of the columns (string) to insert
-            values_insert (list): list of tuples (which must have the same length as the tuple from column_list) with the values to insert
-        """
-        column_string = ", ".join(column_list)
-        records = ""
-        for value in values_insert:
-            if len(column_list) == len(value):
-                value_string = ", ".join(value)
-                self._cursor.execute(self._insert_query.format(
-                    table_name, column_string, value_string))
-                self._pg_db.commit()
-                records = self._cursor.fetchall()
-            else:
-                records = "Fail - the length of columns and values tuples doesn't match"
-            print("Output: ", records)
-
     def from_csv_to_psql(self, filename, table_name, column_list=None, sep=','):
         """Saves csv records to postgresql
 
